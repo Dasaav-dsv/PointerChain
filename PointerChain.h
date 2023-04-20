@@ -86,7 +86,7 @@ namespace PointerChain {
 	private:
 		void*& base;
 		const std::tuple<Offsets_&...> offsets;
-		PtrChainBase(void*& base, const Offsets_&... offsets) : base(base), offsets(std::forward_as_tuple<const Offsets_&...>(offsets...)) {}
+		PtrChainBase(const void*& base, const Offsets_&... offsets) : base(base), offsets(std::forward_as_tuple<const Offsets_&...>(offsets...)) {}
 
 		template <typename PointerType, bool null_safe, typename T, typename... Offsets> friend constexpr auto make(T*& base, const Offsets&... offsets);
 
@@ -146,6 +146,6 @@ namespace PointerChain {
 	// Only way to construct a pointer chain. PointerType is the type pointed to by the chain, null_safe dictates whether EVERY offset should be treated as unsafe (unsigned).
 	template <typename PointerType, bool null_safe = false, typename T, typename... Offsets> static constexpr auto make(T*& base, const Offsets&... offsets)
 	{
-		return PtrChainBase<PointerType, null_safe, const Offsets&...>(base, offsets...);
+		return PtrChainBase<PointerType, null_safe, const Offsets&...>(reinterpret_cast<const void*&>(base), offsets...);
 	}
 }
