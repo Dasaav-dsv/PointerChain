@@ -66,6 +66,11 @@ namespace PointerChain {
 			return *this->get();
 		}
 
+		constexpr PointerType_* operator ->()
+		{
+			return this->get();
+		}
+
 		// Returns the current value at an offset.
 		template<std::size_t I> constexpr auto getOffset() const
 		{
