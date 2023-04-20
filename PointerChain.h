@@ -45,9 +45,19 @@ namespace PointerChain {
 		}
 
 		// Dereference the chain and check for nullptr.
-		constexpr bool operator !()
+		constexpr operator bool()
 		{
-			return !this->get<std::tuple_size<std::tuple<Offsets_...>>::value>();
+		    return !!this->get();
+		}
+
+		constexpr bool operator != (std::nullptr_t null)
+		{
+		    return this->get() != null;
+		}
+
+		constexpr bool operator == (std::nullptr_t null)
+		{
+		    return this->get() == null;
 		}
 
 		// Dereference the chain.
