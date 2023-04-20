@@ -13,7 +13,7 @@
 *                                             ^^^^                       ^^^^^^^^^^^^^
 *   standard nullptr check               check for nullptr               an integer variable
 *   (will check every important* step)   every pointer step	         (referenced)
-*	  v
+*     v
 * if (!pointerChain) {...} // *every unsigned step, the final offset and/or all of them if nullptr_safe is set (it is in the example above)
 * 
 * int* pVal = pointerChain.get(); // PointerChain::get() for a pointer from the last offset
