@@ -6,13 +6,13 @@
 
 /*
 * How to use:
-*																  unsafe step (unsigned typed integer)
-*								   type pointed at  1st pointer	  (nullptr check before adding offset)
-*										 vvv		vvvvvvvvvvv		vvv
+*                                                                 unsafe step (unsigned typed integer)
+*                                 type pointed at  1st pointer	  (nullptr check before adding offset)
+*                                        vvv        vvvvvvvvvvv     vvv
 * auto pointerChain = PointerChain::make<int, true>(pointerBase, 8, 40u, dynamicOffset, 24);
-*											  ^^^^						 ^^^^^^^^^^^^^
-*	standard nullptr check      			  check for nullptr			 an integer variable
-*	(will check every important* step)  	  every pointer step	     (referenced)
+*                                             ^^^^                       ^^^^^^^^^^^^^
+*   standard nullptr check               check for nullptr               an integer variable
+*   (will check every important* step)   every pointer step	         (referenced)
 *	  v
 * if (!pointerChain) {...} // *every unsigned step, the final offset and/or all of them if nullptr_safe is set (it is in the example above)
 * 
