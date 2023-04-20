@@ -47,17 +47,17 @@ namespace PointerChain {
 		// Dereference the chain and check for nullptr.
 		constexpr operator bool()
 		{
-		    return !!this->get();
+			return !!this->get();
 		}
 
 		constexpr bool operator != (std::nullptr_t null)
 		{
-		    return this->get() != null;
+			return this->get() != null;
 		}
 
 		constexpr bool operator == (std::nullptr_t null)
 		{
-		    return this->get() == null;
+			return this->get() == null;
 		}
 
 		// Dereference the chain.
@@ -84,11 +84,12 @@ namespace PointerChain {
 		}
 
 	private:
-		void*& base;
+		void* const& base;
 		const std::tuple<Offsets_&...> offsets;
-		PtrChainBase(const void*& base, const Offsets_&... offsets) : base(base), offsets(std::forward_as_tuple<const Offsets_&...>(offsets...)) {}
+		PtrChainBase(void* const& base, const Offsets_&... offsets) : base(base), offsets(std::forward_as_tuple<const Offsets_&...>(offsets...)) {}
 
-		template <typename PointerType, bool null_safe, typename T, typename... Offsets> friend constexpr auto make(T*& base, const Offsets&... offsets);
+		template <typename PointerType, bool null_safe, typename T, typename... Offsets> friend constexpr auto make(T const& base, const Offsets&... offsets);
+		template <typename PointerType, bool null_safe, typename T, typename... Offsets> friend constexpr auto make(T* const& base, const Offsets&... offsets);
 
 		// Applies a tuple to a traversal function. If null_safe was set at instantiation, nullptr checks will be added every step of the chain.
 		template <typename T = void, typename... Ts> constexpr T* apply_(const std::tuple<Ts...>& t)
@@ -108,7 +109,7 @@ namespace PointerChain {
 
 		// Chain traversal functions. If an offset is of an unsigned type, perform a nullptr check before adding it.
 
-		template <typename T> constexpr void* traverse(void*& base, const T& offset0)
+		template <typename T> constexpr void* traverse(void* const& base, const T& offset0)
 		{
 			if constexpr (std::is_same_v<T, unsigned int>) {
 				if (!base) return nullptr;
@@ -116,36 +117,24 @@ namespace PointerChain {
 			return reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + static_cast<int>(offset0));
 		}
 
-		template <typename T> constexpr void* traverse(void**& base, const T& offset0)
-		{
-			if (!base) return nullptr;
-			if constexpr (std::is_same_v<T, unsigned int>) {
-				if (!*base) return nullptr;
-			}
-			return reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(*base) + static_cast<int>(offset0));
-		}
-
-		template <typename T, typename... Args> constexpr void* traverse(void*& base, const T& offset0, const Args... offsets)
+		template <typename T, typename... Args> constexpr void* traverse(void* const& base, const T& offset0, const Args... offsets)
 		{
 			if constexpr (std::is_same_v<T, unsigned int>) {
 				if (!base) return nullptr;
 			}
 			return traverse(reinterpret_cast<void*&>(*reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(base) + static_cast<int>(offset0))), offsets...);
 		}
-
-		template <typename T, typename... Args> constexpr void* traverse(void**& base, const T& offset0, const Args... offsets)
-		{
-			if (!base) return nullptr;
-			if constexpr (std::is_same_v<T, unsigned int>) {
-				if (!*base) return nullptr;
-			}
-			return traverse(reinterpret_cast<void*&>(*reinterpret_cast<uintptr_t*>(reinterpret_cast<unsigned char*>(*base) + static_cast<int>(offset0))), offsets...);
-		}
 	};
 
 	// Only way to construct a pointer chain. PointerType is the type pointed to by the chain, null_safe dictates whether EVERY offset should be treated as unsafe (unsigned).
-	template <typename PointerType, bool null_safe = false, typename T, typename... Offsets> static constexpr auto make(T*& base, const Offsets&... offsets)
+	template <typename PointerType, bool null_safe = false, typename T, typename... Offsets> static constexpr auto make(T const& base, const Offsets&... offsets)
 	{
-		return PtrChainBase<PointerType, null_safe, const Offsets&...>(reinterpret_cast<const void*&>(base), offsets...);
+		typename std::add_pointer<typename std::add_const<T>::type>::type base_ = &base;
+		return PtrChainBase<PointerType, null_safe, const Offsets&...>(reinterpret_cast<void* const&>(base), offsets...);
+	}
+
+	template <typename PointerType, bool null_safe = false, typename T, typename... Offsets> static constexpr auto make(T* const& base, const Offsets&... offsets)
+	{
+		return PtrChainBase<PointerType, null_safe, const Offsets&...>(reinterpret_cast<void* const&>(base), offsets...);
 	}
 }
