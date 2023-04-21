@@ -175,14 +175,14 @@ namespace PointerChain {
 	// Keep in mind any variable passed to PointerChain::make will be stored as a reference to that variable.
 	template <typename PointerType, bool null_safe = false, typename Tb, typename... Offsets> inline constexpr auto make(Tb base, Offsets&&... offsets) noexcept
 	{
-		constexpr std::size_t addOffsetsN = std::is_reference_v<Tb> ? Impl::pointer_depth_v<Tb> +1 : std::is_pointer_v<Tb> ? Impl::pointer_depth_v<Tb> : 0;
-		constexpr auto addOffsets = Impl::generate_tuple<int, addOffsetsN>();
 		auto base_ = reinterpret_cast<const uintptr_t&>(base);
+		constexpr int64_t pointerDepth = Impl::pointer_depth_v<Tb> + std::is_reference_v<Tb> - 1;
 
-		if constexpr (!std::is_reference_v<Tb> && !std::is_pointer_v<Tb>) {
+		if constexpr (pointerDepth <= 0) {
 			return PtrChainBase<PointerType, null_safe, decltype(base_), std::conditional_t<Impl::is_immediate_value_v<Offsets>, std::decay_t<Offsets>, Offsets&>...>(base_, offsets...);
 		}
 		else {
+			constexpr auto addOffsets = Impl::generate_tuple<int, pointerDepth>();
 			return std::apply([&](auto &&... args)->auto { return PtrChainBase<PointerType, null_safe, decltype(base_), std::conditional_t<Impl::is_immediate_value_v<decltype(args)>, std::decay_t<decltype(args)>, decltype(args)&>...>(base_, args...); }, std::tuple_cat(addOffsets, std::forward_as_tuple(offsets...)));
 		}
 	}
