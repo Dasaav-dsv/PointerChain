@@ -173,7 +173,7 @@ namespace PointerChain {
 	// The base can be of any type, references and pointers are dereferenced when traversing the pointer!
 	// The offsets can either be immediate integral values or variables of types that can be implicitly converted to such.
 	// Keep in mind any variable passed to PointerChain::make will be stored as a reference to that variable.
-	template <typename PointerType, bool null_safe = false, typename Tb, typename... Offsets> inline constexpr auto make(Tb base, Offsets&&... offsets) noexcept
+	template <typename PointerType = unsigned char, bool null_safe = false, typename Tb, typename... Offsets> inline constexpr auto make(Tb base, Offsets&&... offsets) noexcept
 	{
 		auto base_ = reinterpret_cast<const uintptr_t&>(base);
 		constexpr int64_t pointerDepth = Impl::pointer_depth_v<Tb> + std::is_reference_v<Tb> - 1;
