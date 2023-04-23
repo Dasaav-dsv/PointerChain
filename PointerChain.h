@@ -321,9 +321,6 @@ namespace PointerChain {
 	// Only way to construct a pointer chain. PointerType is the type pointed to by the chain, null_safe dictates whether EVERY offset should be treated as unsafe (unsigned).
 	template <typename PointerType = unsigned char, bool null_safe = false, typename Tb, typename... Offsets> inline constexpr auto make(Tb& base, Offsets&&... offsets) noexcept
 	{
-		// Pretend we live in a world with constexpr ternary expressions
-		//const uintptr_t& base_ = [&]() constexpr -> const uintptr_t& { if constexpr (std::is_reference_v<Tb> && !std::is_pointer_v<Tb>) return base; else return reinterpret_cast<const uintptr_t&>(base);}();
-		//const uintptr_t& base_ = std::is_reference_v<Tb> && !std::is_pointer_v<Tb> ? static_cast<uintptr_t&>(base) : reinterpret_cast<const uintptr_t&>(base);
 		auto base_ = reinterpret_cast<const uintptr_t&>(base);
 		constexpr int64_t pointerDepth = Impl::pointer_depth_v<Tb> + std::is_reference_v<Tb> - 1;
 
