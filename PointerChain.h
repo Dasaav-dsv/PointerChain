@@ -28,14 +28,15 @@
 namespace PointerChain {
 	// Implementation helpers for constructing and traversing pointer chains.
 	namespace Impl {
-		// A helper make function, use PointerChain::make instead.
-		template <typename PointerType, bool null_safe, std::size_t extra_offset_count = 0, bool decay_immediate = true, typename Tb, typename... Ts> inline constexpr auto make(const Tb& base, const std::tuple<Ts...>& t) noexcept;
+		// Helper make functions, use PointerChain::make instead.
+		template <typename PointerType, bool null_safe, std::size_t extra_offset_count = 0, typename Tb, typename... Offsets> inline constexpr auto make(Tb&& base, Offsets&&... offsets) noexcept;
+		template <typename PointerType, bool null_safe, std::size_t extra_offset_count = 0, typename Tb, typename... Offsets> inline constexpr auto make(Tb&& base, std::tuple<Offsets...>) noexcept;
 
 		template <typename T> struct pointer_depth {
 			static constexpr std::size_t value = 0;
 		};
 
-		template<typename T> struct pointer_depth<T*> {
+		template <typename T> struct pointer_depth<T*> {
 			static constexpr std::size_t value = 1 + pointer_depth<T>::value;
 		};
 
@@ -55,7 +56,10 @@ namespace PointerChain {
 			static constexpr bool value = true;
 		};
 
-		template<std::size_t, class T> using T_ = T;
+		// Decay rvalue references to pass them by value.
+		template <typename T> using decay_rvalue_reference_t = typename std::conditional_t<std::is_rvalue_reference_v<T>, std::decay_t<T>, T>;
+
+		template <std::size_t, class T> using T_ = T;
 
 		template<typename T, std::size_t... Is> constexpr auto generate_tuple(std::index_sequence<Is...>) noexcept
 		{
@@ -68,9 +72,14 @@ namespace PointerChain {
 			return generate_tuple<T>(std::make_index_sequence<N>{});
 		}
 
+		template <typename... Ts> constexpr auto subtuple(Ts&&... elements)
+		{
+			return static_cast<std::tuple<decay_rvalue_reference_t<Ts>...>>(std::forward_as_tuple(std::forward<Ts>(elements)...));
+		}
+
 		template <std::size_t Start, std::size_t... I, typename... Ts> constexpr auto subtuple(const std::tuple<Ts...>& t, std::index_sequence<I...>) noexcept
 		{
-			return std::make_tuple(std::get<Start + I>(t)...);
+			return subtuple(static_cast<std::tuple_element_t<Start + I, std::tuple<Ts...>>>(std::get<Start + I>(t))...);
 		}
 
 		// Create a subtuple from elements from indexes Start to End.
@@ -79,45 +88,33 @@ namespace PointerChain {
 			return subtuple<Start>(t, std::make_index_sequence<End - Start + 1>{});
 		}
 
-		template <typename T> struct is_immediate_value
-		{
-			static constexpr bool value = std::is_integral_v<std::remove_reference_t<T>>;
-		};
-
-		// Check if a type is an immediate value or a variable, only works with forwarding references.
-		template <typename T> constexpr bool is_immediate_value_v = is_immediate_value<T>::value;
-
 		// A wrapper for storing offsets of reference offsets.
-		template <typename T_ = int&> class ref_offset_wrapper {
+		template <typename T1_ = int&, typename T2_ = int> class ref_offset_wrapper {
 		public:
 			ref_offset_wrapper() = delete;
-			T_ ref_offset;
-			int offset;
-
-			using wrapped_type = std::conditional_t<is_same_template_class<ref_offset_wrapper<>, T_>::value, typename T_::wrapped_type, T_>;
+			T1_ ref_offset;
+			T2_ offset;
 
 			// Will recursively add up all of the offsets in wrappers and wrapped wrappers.
 			constexpr operator int() const noexcept
 			{
-				return static_cast<int>(ref_offset) + offset;
+				return static_cast<int>(ref_offset) + static_cast<int>(offset);
 			}
 
 		private:
-			ref_offset_wrapper(T_ ref_offset, int offset) : ref_offset(ref_offset), offset(offset) {
-				static_assert(std::is_same_v<decltype(ref_offset), const int&>);
-			}
-			template <typename T> friend constexpr auto make_ref_offset_wrapper(T& ref_offset, int offset);
+			ref_offset_wrapper(T1_ ref_offset, T2_ offset) : ref_offset(ref_offset), offset(offset) {}
+			template <typename T1, typename T2> friend constexpr auto make_ref_offset_wrapper(T1& ref_offset, T2&& offset);
 		};
 
 		// Makes a ref_offset_wrapper, storing a reference offset as such and stripping references when wrapping another ref_offset_wrapper.
-		template <typename T> constexpr auto make_ref_offset_wrapper(T& ref_offset, int offset)
+		template <typename T1, typename T2> constexpr auto make_ref_offset_wrapper(T1& ref_offset, T2&& offset)
 		{
-			if constexpr (Impl::is_same_template_class<Impl::ref_offset_wrapper<>, T>::value) {
-				return ref_offset_wrapper([](T strip_ref) constexpr -> T { return strip_ref; }(ref_offset), offset);
+			static_assert(std::is_integral_v<std::decay_t<T2>>, "Offset type must explicitly be an integer type.");
+			if constexpr (Impl::is_same_template_class<Impl::ref_offset_wrapper<>, T1>::value) {
+				return ref_offset_wrapper(static_cast<std::decay_t<decltype(ref_offset)>>(ref_offset), offset);
 			}
 			else {
-				static_assert(std::is_same_v<decltype(ref_offset), const int&>);
-				return ref_offset_wrapper<T&>(ref_offset, offset);
+				return ref_offset_wrapper<T1&, decay_rvalue_reference_t<T2>>(ref_offset, offset);
 			}
 		}
 
@@ -133,28 +130,31 @@ namespace PointerChain {
 	}
 
 	// Base PointerChain class
-	template <typename PointerType_, bool null_safe_ = false, std::size_t extra_offset_count_ = 0, typename Tb_ = uintptr_t, typename... Offsets_> class PtrChainBase {
+	template <typename PointerType_, typename Tb_, bool null_safe_ = false, std::size_t extra_offset_count_ = 0, typename... Offsets_> class PtrChainBase {
 		static_assert(std::conjunction_v<std::is_integral<std::decay_t<Offsets_>>...>
 			|| std::disjunction_v<Impl::is_same_template_class<Impl::ref_offset_wrapper<>, std::decay_t<Offsets_>>...>,
 			"Offset type must explicitly be an integer type.");
 
 	public:
-		// No default constructor, only PointerChain::make can be used.
+		// Use PointerChain::make instead.
 		PtrChainBase() = delete;
+		PtrChainBase(Tb_ base, Offsets_... offsets) : base(base), offsets(std::forward_as_tuple<Offsets_...>(std::forward<Offsets_>(offsets)...)) {}
+		PtrChainBase(Tb_ base, std::tuple<Offsets_...> offsets) : base(base), offsets(offsets) {}
+
 		virtual ~PtrChainBase() {}
 
 		PtrChainBase(const PtrChainBase& other) : base(other.base), offsets(other.offsets) {}
 		PtrChainBase(PtrChainBase&& other) : base(std::move(other.base)), offsets(std::move(other.offsets)) {}
 
 		// Create a chain with a new pointed to type.
-		template <typename TOther> constexpr auto to() const
+		template <typename TOther> constexpr auto to()
 		{
-			return Impl::make<TOther, null_safe_, extra_offset_count_>(this->base, this->offsets);
+			return PtrChainBase<TOther, Tb_, null_safe_, extra_offset_count_, Offsets_...>(this->base, this->offsets);
 		}
 
 		// Traverse offsets up until and including N (default = all) and return a pointer from the last offset traversed.
 		// At least one offset needs to be traversed or the program is ill-formed.
-		template <std::size_t N = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1> constexpr auto get() noexcept
+		template <std::size_t N = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 1> constexpr auto get() noexcept
 		{
 			static_assert(N < Impl::pack_size_v<Offsets_...> - extra_offset_count_, "N cannot be greater than or equal to the total number of offsets");
 			if constexpr (N < Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1) {
@@ -166,48 +166,48 @@ namespace PointerChain {
 		}
 
 		// Create a new chain with an offset added to the last offset of the original.
-		template <typename T> constexpr auto operator + (T offset) const noexcept
+		template <typename T> constexpr auto operator + (T&& offset) noexcept
 		{
-			static_assert(std::is_integral_v<T>, "Offset type must explicitly be an integer type.");
+			static_assert(std::is_integral_v<std::decay_t<T>>, "Offset type must explicitly be an integer type.");
 			constexpr std::size_t offsetNum = Impl::pack_size_v<Offsets_...>;
 			constexpr std::size_t lastIndex = offsetNum - 1;
 			if constexpr (std::is_reference_v<std::tuple_element_t<lastIndex, std::tuple<Offsets_...>>>
-				|| std::is_base_of_v<Impl::ref_offset_wrapper<>, std::tuple_element_t<lastIndex, std::tuple<Offsets_...>>>) {
+				|| Impl::is_same_template_class<Impl::ref_offset_wrapper<>, std::tuple_element_t<lastIndex, std::tuple<Offsets_...>>>::value) {
 				auto ref_wrapper = std::make_tuple(Impl::make_ref_offset_wrapper(std::get<lastIndex>(this->offsets), offset));
 				if constexpr (offsetNum > 1) {
 					auto t = std::tuple_cat(Impl::subtuple<0, lastIndex - 1>(this->offsets), ref_wrapper);
-					return Impl::make<PointerType_, null_safe_, extra_offset_count_>(this->base, t);
+					return Impl::make<PointerType_, null_safe_, extra_offset_count_, Tb_>(this->base, t);
 				}
 				else {
-					return Impl::make<PointerType_, null_safe_, extra_offset_count_>(this->base, ref_wrapper);
+					return Impl::make<PointerType_, null_safe_, extra_offset_count_, Tb_>(this->base, ref_wrapper);
 				}
 			}
 			else {
 				auto t = std::tuple_cat(Impl::subtuple<0, lastIndex - 1>(this->offsets), std::make_tuple(std::get<lastIndex>(this->offsets) + offset));
-				return Impl::make<PointerType_, null_safe_, extra_offset_count_>(this->base, t);
+				return Impl::make<PointerType_, null_safe_, extra_offset_count_, Tb_>(this->base, t);
 			}
 		}
 
 		// Create a new chain with an offset subracted from the last offset of the original.
-		template <typename T> constexpr auto operator - (T offset) const noexcept
+		template <typename T> constexpr auto operator - (T&& offset) noexcept
 		{
-			static_assert(std::is_integral_v<T>, "Offset type must explicitly be an integer type.");
+			static_assert(std::is_integral_v<std::decay_t<T>>, "Offset type must explicitly be an integer type.");
 			constexpr std::size_t offsetNum = Impl::pack_size_v<Offsets_...>;
 			constexpr std::size_t lastIndex = offsetNum - 1;
 			if constexpr (std::is_reference_v<std::tuple_element_t<lastIndex, std::tuple<Offsets_...>>>
-				|| std::is_base_of_v<Impl::ref_offset_wrapper<>, std::tuple_element_t<lastIndex, std::tuple<Offsets_...>>>) {
+				|| Impl::is_same_template_class<Impl::ref_offset_wrapper<>, std::tuple_element_t<lastIndex, std::tuple<Offsets_...>>>::value) {
 				auto ref_wrapper = std::make_tuple(Impl::make_ref_offset_wrapper(std::get<lastIndex>(this->offsets), -offset));
 				if constexpr (offsetNum > 1) {
 					auto t = std::tuple_cat(Impl::subtuple<0, lastIndex - 1>(this->offsets), ref_wrapper);
-					return Impl::make<PointerType_, null_safe_, extra_offset_count_>(this->base, t);
+					return Impl::make<PointerType_, null_safe_, extra_offset_count_, Tb_>(this->base, t);
 				}
 				else {
-					return Impl::make<PointerType_, null_safe_, extra_offset_count_>(this->base, ref_wrapper);
+					return Impl::make<PointerType_, null_safe_, extra_offset_count_, Tb_>(this->base, ref_wrapper);
 				}
 			}
 			else {
 				auto t = std::tuple_cat(Impl::subtuple<0, lastIndex - 1>(this->offsets), std::make_tuple(std::get<lastIndex>(this->offsets) - offset));
-				return Impl::make<PointerType_, null_safe_, extra_offset_count_>(this->base, t);
+				return Impl::make<PointerType_, null_safe_, extra_offset_count_, Tb_>(this->base, t);
 			}
 		}
 
@@ -255,7 +255,7 @@ namespace PointerChain {
 		}
 
 		// Returns the current value at an offset, defaults to the last one in the chain.
-		template<std::size_t I = Impl::pack_size_v<Offsets_...> + extra_offset_count_ - 1> constexpr auto getOffset() const noexcept
+		template<std::size_t I = Impl::pack_size_v<Offsets_...> +extra_offset_count_ - 1> constexpr auto getOffset() const noexcept
 		{
 			static_assert(I < Impl::pack_size_v<Offsets_...> - extra_offset_count_, "Offset index out of bounds.");
 			return std::get<I + extra_offset_count_>(offsets);
@@ -270,10 +270,6 @@ namespace PointerChain {
 	private:
 		const Tb_ base;
 		const std::tuple<Offsets_...> offsets;
-		// Private constructor - use PointerChain::make instead.
-		PtrChainBase(Tb_ base, Offsets_... offsets) : base(base), offsets(std::forward_as_tuple<Offsets_&...>(offsets...)) {}
-
-		template <typename PointerType, bool null_safe, std::size_t extra_offset_count, bool decay_immediate, typename Tb, typename... Ts> friend inline constexpr auto Impl::make(const Tb& base, const std::tuple<Ts...>& t) noexcept;
 
 		// Applies a tuple to a traversal function. If null_safe was set at instantiation, nullptr checks will be added every step of the chain.
 		template <typename T = void, typename... Ts> constexpr T* apply_(const std::tuple<Ts...>& t) noexcept
@@ -300,37 +296,33 @@ namespace PointerChain {
 			if constexpr (std::is_same_v<typename Impl::unwrap_type<To>::type, unsigned int>) {
 				if (!base) return nullptr;
 			}
-			return traverse(*reinterpret_cast<uintptr_t*>(static_cast<uintptr_t>(base) + static_cast<int>(offset0)), offsets...);
+			return traverse(*reinterpret_cast<uintptr_t*>(reinterpret_cast<unsigned char*>(base) + static_cast<int>(offset0)), offsets...);
 		}
 	};
 
-	template <typename PointerType, bool null_safe, std::size_t extra_offset_count, bool decay_immediate, typename Tb, typename... Ts> inline constexpr auto Impl::make(const Tb& base, const std::tuple<Ts...>& t) noexcept
+	template <typename PointerType, bool null_safe, std::size_t extra_offset_count, typename Tb, typename... Offsets> inline constexpr auto Impl::make(Tb&& base, Offsets&&... offsets) noexcept
 	{
-		if constexpr (decay_immediate) {
-			return std::apply([&](auto &&... args) constexpr -> auto { return PtrChainBase<PointerType, null_safe, extra_offset_count, Tb, std::conditional_t<Impl::is_immediate_value_v<decltype(args)>, std::decay_t<decltype(args)>, decltype(args)&>...>(base, args...); }, t);
-		}
-		else {
-			return std::apply([&](auto &&... args) constexpr -> auto { return PtrChainBase<PointerType, null_safe, extra_offset_count, Tb, decltype(args)...>(base, args...); }, t);
-		}
+		return PtrChainBase<PointerType, Impl::decay_rvalue_reference_t<decltype(base)>, null_safe, extra_offset_count, Impl::decay_rvalue_reference_t<decltype(offsets)>...>(std::forward<decltype(base)>(base), std::forward<Offsets>(offsets)...);
 	}
 
-	// Only way to construct a pointer chain. PointerType is the type pointed to by the chain, null_safe dictates whether EVERY offset should be treated as unsafe (unsigned).
+	template <typename PointerType, bool null_safe, std::size_t extra_offset_count, typename Tb, typename... Offsets> inline constexpr auto Impl::make(Tb&& base, std::tuple<Offsets...> offsets) noexcept
+	{
+		return PtrChainBase<PointerType, Impl::decay_rvalue_reference_t<decltype(base)>, null_safe, extra_offset_count, Impl::decay_rvalue_reference_t<Offsets>...>(std::forward<decltype(base)>(base), offsets);
+	}
+
+	// PointerType is the type pointed to by the chain, null_safe dictates whether EVERY offset should be treated as unsafe (unsigned).
 	// The base can be of any type, references and pointers are dereferenced when traversing the pointer!
 	// The offsets can either be immediate integral values or variables of types that can be implicitly converted to such.
 	// Keep in mind any variable passed to PointerChain::make will be stored as a reference to that variable.
-	// Only way to construct a pointer chain. PointerType is the type pointed to by the chain, null_safe dictates whether EVERY offset should be treated as unsafe (unsigned).
-	template <typename PointerType = unsigned char, bool null_safe = false, typename Tb, typename... Offsets> inline constexpr auto make(Tb& base, Offsets&&... offsets) noexcept
+	template <typename PointerType = unsigned char, bool null_safe = false, typename Tb, typename... Offsets> inline constexpr auto make(Tb&& base, Offsets&&... offsets) noexcept
 	{
-		auto base_ = reinterpret_cast<const uintptr_t&>(base);
-		constexpr int64_t pointerDepth = Impl::pointer_depth_v<Tb> + std::is_reference_v<Tb> - 1;
+		constexpr int64_t pointerDepth = Impl::pointer_depth_v<std::decay_t<Tb>> + std::is_rvalue_reference_v<decltype(base)> - 1;
 
 		if constexpr (pointerDepth <= 0) {
-			auto t = std::forward_as_tuple(offsets...);
-			return Impl::make<PointerType, null_safe>(base_, t);
+			return Impl::make<PointerType, null_safe>(base, std::forward<Offsets>(offsets)...);
 		}
 		else {
-			auto t = std::tuple_cat(Impl::generate_tuple<std::conditional_t<null_safe, unsigned int, int>, pointerDepth>(), std::forward_as_tuple(offsets...));
-			return Impl::make<PointerType, null_safe, pointerDepth>(base_, t);
+			return std::apply([&](auto ... extraOffsets) constexpr -> auto { return Impl::make<PointerType, null_safe, pointerDepth>(base, static_cast<std::decay_t<decltype(extraOffsets)>>(extraOffsets)..., std::forward<Offsets>(offsets)...); }, Impl::generate_tuple<std::conditional_t<null_safe, unsigned int, int>, pointerDepth>());
 		}
 	}
 }
