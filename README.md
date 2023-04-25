@@ -49,7 +49,7 @@ int main()
     void* playerModules = playerHPSafe.get<4>();
 
     // The pointed to object type can be cast with PointerChain::to<T>;
-    auto currentPlayerAnimation = PointerChain::make<int>(WorldChrMan, 0x20u);
+    auto currentPlayerAnimation = PointerChain::make<int>(playerModules, 0x20u);
     auto currentPlayerAnimationTime = currentPlayerAnimation.to<float>() + 0x4;
     
     // A pointer chain can be implicitly cast to a boolean,
