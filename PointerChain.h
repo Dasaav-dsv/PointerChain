@@ -154,7 +154,7 @@ namespace PointerChain {
 
 		// Traverse offsets up until and including N (default = all) and return a pointer from the last offset traversed.
 		// At least one offset needs to be traversed or the program is ill-formed.
-		template <std::size_t N = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 1> constexpr auto get() noexcept
+		template <std::size_t N = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1> constexpr auto get() noexcept
 		{
 			static_assert(N < Impl::pack_size_v<Offsets_...> - extra_offset_count_, "N cannot be greater than or equal to the total number of offsets");
 			if constexpr (N < Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1) {
@@ -211,22 +211,28 @@ namespace PointerChain {
 			}
 		}
 
-		// Dereference the chain and check for nullptr.
 		constexpr operator bool() noexcept
 		{
-			return !!this->get();
+			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 2;
+			if constexpr (offsetIndex >= 0) {
+				void** pResult = reinterpret_cast<void**>(this->get<offsetIndex>());
+				return !!pResult ? !!*pResult : false;
+			}
+			else {
+				return !!base;
+			}
 		}
 
 		// Comparison operator for nullptr.
 		constexpr bool operator != (std::nullptr_t null) noexcept
 		{
-			return this->get() != null;
+			return !!*this;
 		}
 
 		// Comparison operator for nullptr.
 		constexpr bool operator == (std::nullptr_t null) noexcept
 		{
-			return this->get() == null;
+			return !*this;
 		}
 
 		// Dereference the pointer chain.
@@ -250,12 +256,11 @@ namespace PointerChain {
 		// Dereference function with a fallback value returned when dereferencing returns nullptr.
 		constexpr PointerType_& dereference(PointerType_&& fallback)
 		{
-			PointerType_* ptr = this->get();
-			return !!ptr ? *ptr : fallback;
+			return !!*this ? **this : fallback;
 		}
 
 		// Returns the current value at an offset, defaults to the last one in the chain.
-		template<std::size_t I = Impl::pack_size_v<Offsets_...> +extra_offset_count_ - 1> constexpr auto getOffset() const noexcept
+		template<std::size_t I = Impl::pack_size_v<Offsets_...> + extra_offset_count_ - 1> constexpr auto getOffset() const noexcept
 		{
 			static_assert(I < Impl::pack_size_v<Offsets_...> - extra_offset_count_, "Offset index out of bounds.");
 			return std::get<I + extra_offset_count_>(offsets);
