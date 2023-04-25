@@ -324,7 +324,7 @@ namespace PointerChain {
 	// Keep in mind any variable passed to PointerChain::make will be stored as a reference to that variable.
 	template <typename PointerType = unsigned char, bool null_safe = false, typename Tb, typename... Offsets> POINTERCHAIN_FORCE_INLINE constexpr auto make(Tb&& base, Offsets&&... offsets) noexcept
 	{
-		constexpr int64_t pointerDepth = Impl::pointer_depth_v<std::decay_t<Tb>> + std::is_rvalue_reference_v<decltype(base)> - 1;
+		constexpr int64_t pointerDepth = Impl::pointer_depth_v<std::decay_t<Tb>> - 1;
 
 		if constexpr (pointerDepth <= 0) {
 			return Impl::make<PointerType, null_safe>(base, std::forward<Offsets>(offsets)...);
