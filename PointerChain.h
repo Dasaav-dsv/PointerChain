@@ -216,7 +216,7 @@ namespace PointerChain {
 			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 2;
 			if constexpr (offsetIndex >= 0) {
 				void** pResult = reinterpret_cast<void**>(this->get<offsetIndex>());
-				return !!pResult ? !!*pResult : false;
+				return !!*pResult;
 			}
 			else {
 				return !!base;
