@@ -9,10 +9,10 @@ int main()
     // A simple pointer to the player's health as a 32-bit integer, 
     // note the 3rd offset marked unsigned, a nullptr check will be performed
     // before adding it whenever the pointer is traversed
-	auto playerHP = PointerChain::make<int>(WorldChrMan, 0x10EF8, 0, 0x190u, 0, 0x138); // health
+    auto playerHP = PointerChain::make<int>(WorldChrMan, 0x10EF8, 0, 0x190u, 0, 0x138); // health
 
     // A "safe" version of the same pointer that performs nullptr checks every step
-	auto playerHPSafe = PointerChain::make<int, true>(WorldChrMan, 0x10EF8, 0, 0x190, 0, 0x138);
+    auto playerHPSafe = PointerChain::make<int, true>(WorldChrMan, 0x10EF8, 0, 0x190, 0, 0x138);
 
     // You can add and substract from the last offset of the pointer chain, 
     // creating new pointer chain instances
