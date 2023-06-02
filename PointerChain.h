@@ -216,10 +216,10 @@ namespace PointerChain {
 
 		POINTERCHAIN_FORCE_INLINE constexpr operator bool() noexcept
 		{
-			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 2;
+			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1;
 			if constexpr (offsetIndex >= 0) {
-				void** pResult = reinterpret_cast<void**>(this->get<offsetIndex>());
-				return !!*pResult;
+				void* pResult = reinterpret_cast<void*>(this->get<offsetIndex>());
+				return !!pResult;
 			}
 			else {
 				return !!base;
@@ -259,7 +259,14 @@ namespace PointerChain {
 		// Dereference function with a fallback value returned when dereferencing returns nullptr.
 		POINTERCHAIN_FORCE_INLINE constexpr PointerType_& dereference(PointerType_&& fallback)
 		{
-			return !!*this ? **this : fallback;
+            	constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1;
+			if constexpr (offsetIndex >= 0) {
+				PointerType_* pResult = reinterpret_cast<PointerType_*>(this->get<offsetIndex>());
+				return !!pResult ? *pResult : fallback;
+			}
+			else {
+				return !!*this ? **this : fallback;
+			}
 		}
 
 		// Returns the current value at an offset, defaults to the last one in the chain.
