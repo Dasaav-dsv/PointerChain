@@ -330,7 +330,7 @@ namespace PointerChain {
 			return Impl::make<PointerType, null_safe>(base, std::forward<Offsets>(offsets)...);
 		}
 		else {
-			return std::apply([&](auto ... extraOffsets) constexpr -> auto { return Impl::make<PointerType, null_safe, pointerDepth>(base, static_cast<std::decay_t<decltype(extraOffsets)>>(extraOffsets)..., std::forward<Offsets>(offsets)...); }, Impl::generate_tuple<std::conditional_t<null_safe, unsigned int, int>, pointerDepth>());
+			return std::apply([&](auto ... extraOffsets) constexpr -> auto { return Impl::make<PointerType, null_safe, sizeof...(extraOffsets)>(base, static_cast<std::decay_t<decltype(extraOffsets)>>(extraOffsets)..., std::forward<Offsets>(offsets)...); }, Impl::generate_tuple<std::conditional_t<null_safe, unsigned int, int>, pointerDepth>());
 		}
 	}
 }
