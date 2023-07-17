@@ -15,7 +15,7 @@
 #pragma warning(error: 4714)
 #define POINTERCHAIN_FORCE_INLINE __forceinline
 #else
-#define ERFPS_FORCE_INLINE inline
+#define POINTERCHAIN_FORCE_INLINE inline
 #endif
 
 /// <summary>
