@@ -9,18 +9,13 @@
 // Local always inline macro.
 // Makes the compiler less likely to turn what should be a compile time calculation into a runtime function call.
 // (mostly applies to MSVC)
-#if defined(__clang__)
-#define POINTERCHAIN_FORCE_INLINE [[gnu::always_inline]] [[gnu::gnu_inline]] extern inline
-
-#elif defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #define POINTERCHAIN_FORCE_INLINE [[gnu::always_inline]] inline
-
 #elif defined(_MSC_VER)
 #pragma warning(error: 4714)
 #define POINTERCHAIN_FORCE_INLINE __forceinline
-
 #else
-#error Unsupported compiler
+#define ERFPS_FORCE_INLINE inline
 #endif
 
 /// <summary>
@@ -75,7 +70,7 @@ namespace PointerChain {
 			return generate_tuple<T>(std::make_index_sequence<N>{});
 		}
 
-		template <typename... Ts> constexpr POINTERCHAIN_FORCE_INLINE auto subtuple(Ts&&... elements)
+		template <typename... Ts> POINTERCHAIN_FORCE_INLINE constexpr auto subtuple(Ts&&... elements)
 		{
 			return static_cast<std::tuple<decay_rvalue_reference_t<Ts>...>>(std::forward_as_tuple(std::forward<Ts>(elements)...));
 		}
@@ -106,7 +101,7 @@ namespace PointerChain {
 
 		private:
 			ref_offset_wrapper(T1_ ref_offset, T2_ offset) : ref_offset(ref_offset), offset(offset) {}
-			template <typename T1, typename T2> friend POINTERCHAIN_FORCE_INLINE constexpr auto make_ref_offset_wrapper(T1& ref_offset, T2&& offset);
+			template <typename T1, typename T2> POINTERCHAIN_FORCE_INLINE friend constexpr auto make_ref_offset_wrapper(T1& ref_offset, T2&& offset);
 		};
 
 		// Makes a ref_offset_wrapper, storing a reference offset as such and stripping references when wrapping another ref_offset_wrapper.
@@ -157,10 +152,10 @@ namespace PointerChain {
 
 		// Traverse offsets up until and including N (default = all) and return a pointer from the last offset traversed.
 		// At least one offset needs to be traversed or the program is ill-formed.
-		template <std::size_t N = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1> POINTERCHAIN_FORCE_INLINE constexpr auto get() noexcept
+		template <std::size_t N = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 1> POINTERCHAIN_FORCE_INLINE constexpr auto get() noexcept
 		{
-			static_assert(N < Impl::pack_size_v<Offsets_...> - extra_offset_count_, "N cannot be greater than or equal to the total number of offsets");
-			if constexpr (N < Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1) {
+			static_assert(N < Impl::pack_size_v<Offsets_...> -extra_offset_count_, "N cannot be greater than or equal to the total number of offsets");
+			if constexpr (N < Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 1) {
 				return this->apply_(Impl::subtuple<0, extra_offset_count_ + N>(this->offsets));
 			}
 			else {
@@ -216,7 +211,7 @@ namespace PointerChain {
 
 		POINTERCHAIN_FORCE_INLINE constexpr operator bool() noexcept
 		{
-			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1;
+			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 1;
 			if constexpr (offsetIndex >= 0) {
 				void* pResult = reinterpret_cast<void*>(this->get<offsetIndex>());
 				return !!pResult;
@@ -259,7 +254,7 @@ namespace PointerChain {
 		// Dereference function with a fallback value returned when dereferencing returns nullptr.
 		POINTERCHAIN_FORCE_INLINE constexpr PointerType_& dereference(PointerType_&& fallback)
 		{
-            	constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> - extra_offset_count_ - 1;
+			constexpr int64_t offsetIndex = Impl::pack_size_v<Offsets_...> -extra_offset_count_ - 1;
 			if constexpr (offsetIndex >= 0) {
 				PointerType_* pResult = reinterpret_cast<PointerType_*>(this->get<offsetIndex>());
 				return !!pResult ? *pResult : fallback;
@@ -270,16 +265,16 @@ namespace PointerChain {
 		}
 
 		// Returns the current value at an offset, defaults to the last one in the chain.
-		template<std::size_t I = Impl::pack_size_v<Offsets_...> + extra_offset_count_ - 1> POINTERCHAIN_FORCE_INLINE constexpr auto getOffset() const noexcept
+		template<std::size_t I = Impl::pack_size_v<Offsets_...> +extra_offset_count_ - 1> POINTERCHAIN_FORCE_INLINE constexpr auto getOffset() const noexcept
 		{
-			static_assert(I < Impl::pack_size_v<Offsets_...> - extra_offset_count_, "Offset index out of bounds.");
+			static_assert(I < Impl::pack_size_v<Offsets_...> -extra_offset_count_, "Offset index out of bounds.");
 			return std::get<I + extra_offset_count_>(offsets);
 		}
 
 		// Returns the total number of offsets in the chain.
 		POINTERCHAIN_FORCE_INLINE constexpr std::size_t getNumOffsets() const noexcept
 		{
-			return Impl::pack_size_v<Offsets_...> - extra_offset_count_;
+			return Impl::pack_size_v<Offsets_...> -extra_offset_count_;
 		}
 
 	private:
@@ -331,7 +326,7 @@ namespace PointerChain {
 	// Keep in mind any variable passed to PointerChain::make will be stored as a reference to that variable.
 	template <typename PointerType = unsigned char, bool null_safe = false, typename Tb, typename... Offsets> POINTERCHAIN_FORCE_INLINE constexpr auto make(Tb&& base, Offsets&&... offsets) noexcept
 	{
-		constexpr int64_t pointerDepth = Impl::pointer_depth_v<std::decay_t<Tb>> - 1;
+		constexpr int64_t pointerDepth = Impl::pointer_depth_v<std::decay_t<Tb>> -1;
 
 		if constexpr (pointerDepth <= 0) {
 			return Impl::make<PointerType, null_safe>(base, std::forward<Offsets>(offsets)...);
